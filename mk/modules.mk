@@ -374,3 +374,5 @@ MODULES   += webrtc_aec
 endif
 
 MODULES   += $(EXTRA_MODULES)
+
+MODULES   += goke
