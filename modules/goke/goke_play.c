@@ -13,11 +13,12 @@
 #include "goke.h"
 
 
-
 struct auplay_st {
 	pthread_t thread;
 	volatile bool run;
 	//snd_pcm_t *write;
+    AUDIO_DEV AoDevId;  // Audio output device ID
+    AO_CHN AoChn;       // Audio output channel ID
 	void *sampv;
 	size_t sampc;
 	auplay_write_h *wh;
@@ -38,19 +39,19 @@ static void auplay_destructor(void *arg)
 		(void)pthread_join(st->thread, NULL);
 	}
 
-	/*if (st->write)
-		snd_pcm_close(st->write);*/
+	if (st->AoDevId != -1 && st->AoChn != -1)
+		GK_API_AO_DisableChn(st->AoDevId, st->AoChn);
+		GK_API_AO_Disable(st->AoDevId);
 
 	mem_deref(st->sampv);
 	mem_deref(st->device);
 }
 
-
 static void *write_thread(void *arg)
-{/*
+{
 	struct auplay_st *st = arg;
 	struct auframe af;
-	snd_pcm_sframes_t n;
+	GK_S32 ret;
 	int num_frames;
 
 	num_frames = st->prm.srate * st->prm.ptime / 1000;
@@ -66,9 +67,9 @@ static void *write_thread(void *arg)
 
 		sampv = st->sampv;
 
-		n = snd_pcm_writei(st->write, sampv, samples);
+		ret = GK_API_AO_SendFrame(st->AoDevId, st->AoChn, sampv, samples);
 
-		if (-EPIPE == n) {
+		/*if (-EPIPE == n) {
 			snd_pcm_prepare(st->write);
 
 			n = snd_pcm_writei(st->write, sampv, samples);
@@ -77,37 +78,47 @@ static void *write_thread(void *arg)
 					snd_strerror((int) n));
 			}
 		}
-		else if (n < 0) {
+		else*/
+		if (ret != GK_SUCCESS) {
 			if (st->run)
-				warning("alsa: write error: %s\n",
-					snd_strerror((int) n));
+				warning("goke: write error: %s\n",
+					snd_strerror((int) ret));
 		}
-		else if (n != samples) {
+		/*else if (n != samples) {
 			warning("alsa: write: wrote %d of %d samples\n",
 				(int) n, samples);
-		}
+		}*/
 	}
 
-	snd_pcm_drop(st->write);
+	ret = GK_API_AO_ClearChnBuf(st->AoDevId, st->AoChn);
+	if (ret != GK_SUCCESS) {
+		if (st->run)
+			warning("goke: clear channel buffer error: %s\n",
+				snd_strerror((int) ret));
+	}
 
-	return NULL;*/
+	return NULL;
 }
 
 
 int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		    struct auplay_prm *prm, const char *device,
 		    auplay_write_h *wh, void *arg)
-{/*
+{
 	struct auplay_st *st;
-	snd_pcm_format_t pcmfmt;
+	AUDIO_BIT_WIDTH_E bidwidth;
+	//snd_pcm_format_t pcmfmt;
 	int num_frames;
-	int err;
+	GK_S32 err;
+
 
 	if (!stp || !ap || !prm || !wh)
 		return EINVAL;
 
 	if (!str_isset(device))
-		device = alsa_dev;
+		device = goke_dev;
+	AUDIO_DEV AoDevId = 0;
+	AO_CHN AoChn = 0;
 
 	st = mem_zalloc(sizeof(*st), auplay_destructor);
 	if (!st)
@@ -130,27 +141,34 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		goto out;
 	}
 
-	err = snd_pcm_open(&st->write, st->device, SND_PCM_STREAM_PLAYBACK, 0);
-	if (err < 0) {
-		warning("alsa: could not open auplay device '%s' (%s)\n",
-			st->device, snd_strerror(err));
-		info("consider using dmix as your default alsa device\n");
-		goto out;
-	}
-
-	pcmfmt = aufmt_to_alsaformat(prm->fmt);
-	if (pcmfmt == SND_PCM_FORMAT_UNKNOWN) {
-		warning("alsa: unknown sample format '%s'\n",
+	bidwidth = aufmt_to_audiobitwidth(prm->fmt);
+	if (bidwidth == AUDIO_BIT_WIDTH_BUTT) {
+		warning("goke: unknown sample format '%s'\n",
 			aufmt_name(prm->fmt));
 		err = EINVAL;
 		goto out;
 	}
 
-	err = alsa_reset(st->write, st->prm.srate, st->prm.ch, num_frames,
-			 pcmfmt);
+	//err = alsa_reset(st->write, st->prm.srate, st->prm.ch, num_frames,
+	//		 pcmfmt);
+    err = goke_reset(AoDevId, st->prm.srate, st->prm.ch, num_frames, bidwidth);
 	if (err) {
-		warning("alsa: could not reset player '%s' (%s)\n",
+		warning("goke: could not reset player '%s' (%s)\n",
 			st->device, snd_strerror(err));
+		goto out;
+	}
+
+	//err = snd_pcm_open(&st->write, st->device, SND_PCM_STREAM_PLAYBACK, 0);
+	err = GK_API_AO_Enable(AoDevId);
+	if (err < 0) {
+		warning("goke: could not enable device '%s' (%s)\n",
+			AoDevId, snd_strerror(err));
+		goto out;
+	}
+	err = GK_API_AO_EnableChn(AoDevId, AoChn);
+	if (err < 0) {
+		warning("goke: could not enable channel '%s' (%s)\n",
+			AoChn, snd_strerror(err));
 		goto out;
 	}
 
@@ -161,7 +179,7 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		goto out;
 	}
 
-	debug("alsa: playback started (%s)\n", st->device);
+	debug("goke: playback started (%s)\n", st->device);
 
  out:
 	if (err)
@@ -169,5 +187,5 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 	else
 		*stp = st;
 
-	return err;*/
+	return err;
 }
