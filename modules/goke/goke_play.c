@@ -39,9 +39,10 @@ static void auplay_destructor(void *arg)
 		(void)pthread_join(st->thread, NULL);
 	}
 
-	if (st->AoDevId != -1 && st->AoChn != -1)
+	if (st->AoDevId != -1 && st->AoChn != -1) {
 		GK_API_AO_DisableChn(st->AoDevId, st->AoChn);
 		GK_API_AO_Disable(st->AoDevId);
+   }
 
 	mem_deref(st->sampv);
 	mem_deref(st->device);
@@ -81,8 +82,7 @@ static void *write_thread(void *arg)
 		else*/
 		if (ret != GK_SUCCESS) {
 			if (st->run)
-				warning("goke: write error: %s\n",
-					snd_strerror((int) ret));
+				warning("goke: write error: %s\n", ret);
 		}
 		/*else if (n != samples) {
 			warning("alsa: write: wrote %d of %d samples\n",
@@ -93,8 +93,7 @@ static void *write_thread(void *arg)
 	ret = GK_API_AO_ClearChnBuf(st->AoDevId, st->AoChn);
 	if (ret != GK_SUCCESS) {
 		if (st->run)
-			warning("goke: clear channel buffer error: %s\n",
-				snd_strerror((int) ret));
+			warning("goke: clear channel buffer error: %s\n", ret);
 	}
 
 	return NULL;
@@ -154,7 +153,7 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
     err = goke_reset(AoDevId, st->prm.srate, st->prm.ch, num_frames, bidwidth);
 	if (err) {
 		warning("goke: could not reset player '%s' (%s)\n",
-			st->device, snd_strerror(err));
+			st->device, err);
 		goto out;
 	}
 
@@ -162,13 +161,13 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 	err = GK_API_AO_Enable(AoDevId);
 	if (err < 0) {
 		warning("goke: could not enable device '%s' (%s)\n",
-			AoDevId, snd_strerror(err));
+			AoDevId, err);
 		goto out;
 	}
 	err = GK_API_AO_EnableChn(AoDevId, AoChn);
 	if (err < 0) {
 		warning("goke: could not enable channel '%s' (%s)\n",
-			AoChn, snd_strerror(err));
+			AoChn, err);
 		goto out;
 	}
 
