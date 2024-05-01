@@ -55,7 +55,7 @@ int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
 	err = GK_API_AO_SetPubAttr(AoDevId, &pstAttr);
 	if (err < 0) {
 		warning("goke: cannot set public attributes (%s)\n",
-			snd_strerror(err));
+			err);
 		goto out;
 	}
 
