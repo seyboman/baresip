@@ -203,13 +203,13 @@ static int goke_close(void)
 
 	/* releases all resources of the global configuration tree,
 	   and sets snd_config to NULL. */
-	snd_config_update_free_global();
+	//snd_config_update_free_global();
 
 	return 0;
 }
 
 
-const struct mod_export DECL_EXPORTS(alsa) = {
+const struct mod_export DECL_EXPORTS(goke) = {
 	"goke",
 	"sound",
 	goke_init,
