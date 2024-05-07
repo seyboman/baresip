@@ -55,6 +55,7 @@ static void *write_thread(void *arg)
 	GK_S32 ret;
 	int num_frames;
 
+	debug("goke: init write thread\n");
 	num_frames = st->prm.srate * st->prm.ptime / 1000;
 
 	auframe_init(&af, st->prm.fmt, st->sampv, st->sampc, st->prm.srate,
@@ -82,7 +83,7 @@ static void *write_thread(void *arg)
 		else*/
 		if (ret != GK_SUCCESS) {
 			if (st->run)
-				warning("goke: write error: %s\n", ret);
+				warning("goke: write error: %d\n", ret);
 		}
 		/*else if (n != samples) {
 			warning("alsa: write: wrote %d of %d samples\n",
@@ -93,7 +94,7 @@ static void *write_thread(void *arg)
 	ret = GK_API_AO_ClearChnBuf(st->AoDevId, st->AoChn);
 	if (ret != GK_SUCCESS) {
 		if (st->run)
-			warning("goke: clear channel buffer error: %s\n", ret);
+			warning("goke: clear channel buffer error: %d\n", ret);
 	}
 
 	return NULL;
@@ -110,6 +111,7 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 	int num_frames;
 	GK_S32 err;
 
+	debug("goke: allocating device\n");
 
 	if (!stp || !ap || !prm || !wh)
 		return EINVAL;
@@ -150,27 +152,29 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 
 	//err = alsa_reset(st->write, st->prm.srate, st->prm.ch, num_frames,
 	//		 pcmfmt);
-    err = goke_reset(AoDevId, st->prm.srate, st->prm.ch, num_frames, bidwidth);
+   err = goke_reset(AoDevId, st->prm.srate, st->prm.ch, num_frames, bidwidth);
 	if (err) {
-		warning("goke: could not reset player '%s' (%s)\n",
+		warning("goke: could not reset player '%s' (%d)\n",
 			st->device, err);
 		goto out;
 	}
 
+	debug("goke: enabling device %d\n", AoDevId);
 	//err = snd_pcm_open(&st->write, st->device, SND_PCM_STREAM_PLAYBACK, 0);
 	err = GK_API_AO_Enable(AoDevId);
 	if (err < 0) {
-		warning("goke: could not enable device '%s' (%s)\n",
+		warning("goke: could not enable device '%d' (%d)\n",
 			AoDevId, err);
 		goto out;
 	}
 	err = GK_API_AO_EnableChn(AoDevId, AoChn);
 	if (err < 0) {
-		warning("goke: could not enable channel '%s' (%s)\n",
+		warning("goke: could not enable channel '%d' (%d)\n",
 			AoChn, err);
 		goto out;
 	}
 
+	debug("goke: starting device thread\n");
 	st->run = true;
 	err = pthread_create(&st->thread, NULL, write_thread, st);
 	if (err) {
@@ -178,7 +182,7 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		goto out;
 	}
 
-	debug("goke: playback started (%s)\n", st->device);
+	//debug("goke: playback started (%s)\n", st->device);
 
  out:
 	if (err)

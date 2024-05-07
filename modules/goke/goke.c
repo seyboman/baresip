@@ -41,6 +41,8 @@ int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
 
 	GK_S32 err;
 
+	debug("goke: resetting device\n");
+
 	pstAttr.enSamplerate = srate; // Assuming this is a valid value from AUDIO_SAMPLE_RATE_E
 	pstAttr.enBitwidth = bitwidth; // Assuming this is a valid value from AUDIO_BIT_WIDTH_E
 	pstAttr.enWorkmode = AIO_MODE_PCM_MASTER_STD; // Assuming this is a valid value from AIO_MODE_E
@@ -51,10 +53,11 @@ int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
 	pstAttr.u32ChnCnt = chnCnt; // Assuming this is the number of channels and 2 is a valid value
 	pstAttr.u32ClkSel = 0; // Assuming this is a clock selector and 0 is a valid value
 	pstAttr.enI2sType = AIO_I2STYPE_INNERCODEC; // Assuming this is a valid value from AIO_I2STYPE_E
+	debug("goke: set attributes\n");
 
 	err = GK_API_AO_SetPubAttr(AoDevId, &pstAttr);
 	if (err < 0) {
-		warning("goke: cannot set public attributes (%s)\n",
+		warning("goke: cannot set public attributes (%d)\n",
 			err);
 		goto out;
 	}
@@ -187,6 +190,7 @@ static int goke_init(void)
 {
 	int err = 0;
 
+	debug("goke: init\n");
 	/*err  = ausrc_register(&ausrc, baresip_ausrcl(),
 			      "alsa", alsa_src_alloc);*/
 	err |= auplay_register(&auplay, baresip_auplayl(),
@@ -198,6 +202,7 @@ static int goke_init(void)
 
 static int goke_close(void)
 {
+	debug("goke: close\n");
 	//ausrc  = mem_deref(ausrc);
 	auplay = mem_deref(auplay);
 
