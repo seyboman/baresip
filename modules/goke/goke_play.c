@@ -152,6 +152,7 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 
 	//err = alsa_reset(st->write, st->prm.srate, st->prm.ch, num_frames,
 	//		 pcmfmt);
+	debug("goke: resetting device %d\n", AoDevId);
    err = goke_reset(AoDevId, st->prm.srate, st->prm.ch, num_frames, bidwidth);
 	if (err) {
 		warning("goke: could not reset player '%s' (%d)\n",
@@ -167,6 +168,8 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 			AoDevId, err);
 		goto out;
 	}
+
+	debug("goke: enabling channel %d on device %d\n", AoChn, AoDevId);
 	err = GK_API_AO_EnableChn(AoDevId, AoChn);
 	if (err < 0) {
 		warning("goke: could not enable channel '%d' (%d)\n",
