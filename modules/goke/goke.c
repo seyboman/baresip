@@ -9,7 +9,6 @@
 #include <re.h>
 #include <rem.h>
 #include <baresip.h>
-#include <gk_api_audio.h>
 #include "goke.h"
 
 
@@ -33,70 +32,6 @@ static struct auplay *auplay;
 
 
 
-int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
-	       uint32_t num_frames,
-	       AUDIO_BIT_WIDTH_E bitwidth)
-{
-   struct conf *conf = conf_cur();
-   uint32_t conf_value;
-
-	AIO_ATTR_S pstAttr;
-
-	GK_S32 err;
-
-	debug("goke: resetting device\n");
-
-	pstAttr.enSamplerate = srate; // Assuming this is a valid value from AUDIO_SAMPLE_RATE_E
-	pstAttr.enBitwidth = bitwidth; // Assuming this is a valid value from AUDIO_BIT_WIDTH_E
-	pstAttr.enWorkmode = AIO_MODE_I2S_MASTER; // Assuming this is a valid value from AIO_MODE_E
-	pstAttr.enSoundmode = AUDIO_SOUND_MODE_MONO;	 // Assuming this is a valid value from AUDIO_SOUND_MODE_E
-	pstAttr.u32EXFlag = 0; // Assuming this is a	 flag and 0 is a valid value
-	pstAttr.u32FrmNum = num_frames; // Assuming 	this is the number of frames and 256 is a valid value
-	pstAttr.u32PtNumPerFrm = 1024; // 	Assuming this is the number of points per frame and 1024 is a valid value
-	pstAttr.u32ChnCnt = chnCnt; // Assuming this	 is the number of channels and 2 is a valid value
-	pstAttr.u32ClkSel = 0; // Assuming this is a	 clock selector and 0 is a valid value
-	pstAttr.enI2sType = AIO_I2STYPE_INNERCODEC; 	// Assuming this is a valid value from AIO_I2STYPE_E
-
-   if (0 == conf_get_u32(conf, "goke_ao_samplerate", &conf_value)) { pstAttr.enSamplerate=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_bitwidth", &conf_value)) { pstAttr.enBitwidth=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_workmode", &conf_value)) { pstAttr.enWorkmode=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_soundmode", &conf_value)) { pstAttr.enSoundmode=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_exflag", &conf_value)) { pstAttr.u32EXFlag=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_frmNum", &conf_value)) { pstAttr.u32FrmNum=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_ptNumPerFrm", &conf_value)) { pstAttr.u32PtNumPerFrm=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_chnCnt", &conf_value)) { pstAttr.u32ChnCnt=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_clkSel", &conf_value)) { pstAttr.u32ClkSel=conf_value; }
-   if (0 == conf_get_u32(conf, "goke_ao_i2sType", &conf_value)) { pstAttr.enI2sType=conf_value; }
-
-	debug("goke: set attributes\n");            	
-                                               	
-	err = GK_API_AO_SetPubAttr(AoDevId, &pstAttr);
-	if (err < 0) {
-		warning("goke: cannot set public attributes (%d), enSamplerate: %d, enBitwidth: %d, enWorkmode: %d, enSoundmode: %d, u32EXFlag: %d, u32FrmNum: %d, u32PtNumPerFrm: %d, u32CznCnt: %d, u32ClkSel: %d, enI2sType: %d\n",
-			err,
-			pstAttr.enSamplerate,
-			pstAttr.enBitwidth,
-			pstAttr.enWorkmode,
-			pstAttr.enSoundmode,
-			pstAttr.u32EXFlag,
-			pstAttr.u32FrmNum,
-			pstAttr.u32PtNumPerFrm,
-			pstAttr.u32ChnCnt,
-			pstAttr.u32ClkSel,
-			pstAttr.enI2sType
-      );
-		goto out;
-	}
-
-	err = 0;
-
-out:
-	if (err) {
-		warning("goke: init failed: err=%d\n", err);
-	}
-
-	return err;
-}
 /*/int alsa_reset(snd_pcm_t *pcm, uint32_t srate, uint32_t ch,
 	       uint32_t num_frames,
 	       snd_pcm_format_t pcmfmt)
@@ -211,6 +146,27 @@ AUDIO_BIT_WIDTH_E aufmt_to_audiobitwidth(enum aufmt fmt)
 	}
 }*/
 
+ACODEC_FS_E srate_to_acodec_fs(uint32_t srate)
+{
+   ACODEC_FS_E i2s_fs_sel;
+
+   switch (srate) {
+      case 8000:  i2s_fs_sel = ACODEC_FS_8000;  break;
+      case 16000: i2s_fs_sel = ACODEC_FS_16000; break;
+      case 32000: i2s_fs_sel = ACODEC_FS_32000; break;
+      case 11025: i2s_fs_sel = ACODEC_FS_11025; break;
+      case 22050: i2s_fs_sel = ACODEC_FS_22050; break;
+      case 44100: i2s_fs_sel = ACODEC_FS_44100; break;
+      case 12000: i2s_fs_sel = ACODEC_FS_12000; break;
+      case 24000: i2s_fs_sel = ACODEC_FS_24000; break;
+      case 48000: i2s_fs_sel = ACODEC_FS_48000; break;
+      case 64000: i2s_fs_sel = ACODEC_FS_64000; break;
+      case 96000: i2s_fs_sel = ACODEC_FS_96000; break;
+      default: i2s_fs_sel = ACODEC_FS_BUTT;
+   }
+
+   return i2s_fs_sel;
+}
 
 static int goke_init(void)
 {
