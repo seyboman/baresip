@@ -110,6 +110,7 @@ int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
    uint32_t conf_value;
 
 	AIO_ATTR_S pstAttr;
+   memset(&pstAttr, 0, sizeof(AIO_ATTR_S));
 
 	GK_S32 err;
 
@@ -140,7 +141,7 @@ int goke_reset(AUDIO_DEV AoDevId, uint32_t srate, GK_U32 chnCnt,
 	debug("goke: set attributes\n");            	
                                                	
 	err = GK_API_AO_SetPubAttr(AoDevId, &pstAttr);
-	if (err < 0) {
+	if (err != GK_SUCCESS) {
 		warning("goke: cannot set public attributes (%d), enSamplerate: %d, enBitwidth: %d, enWorkmode: %d, enSoundmode: %d, u32EXFlag: %d, u32FrmNum: %d, u32PtNumPerFrm: %d, u32CznCnt: %d, u32ClkSel: %d, enI2sType: %d\n",
 			err,
 			pstAttr.enSamplerate,
@@ -167,22 +168,25 @@ out:
 	return err;
 }
 
-int goke_init_codec(uint32_t srate, int volume) {
+int goke_init_codec(uint32_t srate, GK_S32 volume) {
    int result, fd;
    ACODEC_FS_E i2s_fs_sel;
 
+	debug("goke: opening codex fd.\n");
    fd = open("/dev/acodec", O_RDWR);
    if (fd < 0) {
 		warning("failed to open /dev/acodec\n");
       goto out;
    }
 
+	debug("goke: soft reset codec.\n");
    result = ioctl(fd, ACODEC_SOFT_RESET_CTRL);
    if (result != GK_SUCCESS) {
       warning("ACODEC_SOFT_RESET_CTRL error: %s", result);
       goto out;
    }
 
+	debug("goke: set codec i2s1.\n");
    i2s_fs_sel = srate_to_acodec_fs(srate);
    result = ioctl(fd, ACODEC_SET_I2S1_FS, &i2s_fs_sel);
    if (result != GK_SUCCESS) {
@@ -190,6 +194,7 @@ int goke_init_codec(uint32_t srate, int volume) {
       goto out;
    }
 
+	debug("goke: set output volume.\n");
    result = ioctl(fd, ACODEC_SET_OUTPUT_VOL, &volume);
    if (result != GK_SUCCESS) {
       warning("ACODEC_SET_OUTPUT_VOL: %s", result);
@@ -245,6 +250,13 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		goto out;
 	}
 
+   debug("goke: init codec\n");
+   err = goke_init_codec(st->prm.srate, 6);
+	if (err) {
+		warning("goke: could not init codec. (%d)\n", err);
+		goto out;
+   }
+
 	bidwidth = aufmt_to_audiobitwidth(prm->fmt);
 	if (bidwidth == AUDIO_BIT_WIDTH_BUTT) {
 		warning("goke: unknown sample format '%s'\n",
@@ -263,13 +275,6 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 		goto out;
 	}
 
-	debug("goke: init codec\n");
-   err = goke_init_codec(st->prm.srate, 0x70);
-	if (err) {
-		warning("goke: could not init codec. (%d)\n", err);
-		goto out;
-   }
-
 	debug("goke: enabling device %d\n", AoDevId);
 	//err = snd_pcm_open(&st->write, st->device, SND_PCM_STREAM_PLAYBACK, 0);
 	err = GK_API_AO_Enable(AoDevId);
@@ -281,6 +286,14 @@ int goke_play_alloc(struct auplay_st **stp, const struct auplay *ap,
 
 	debug("goke: enabling channel %d on device %d\n", AoChn, AoDevId);
 	err = GK_API_AO_EnableChn(AoDevId, AoChn);
+	if (err < 0) {
+		warning("goke: could not enable channel '%d' (%d)\n",
+			AoChn, err);
+		goto out;
+	}
+
+	debug("goke: enabling channel %d on device %d\n", AoChn, AO_SYSCHN_CHNID);
+	err = GK_API_AO_EnableChn(AoDevId, AO_SYSCHN_CHNID);
 	if (err < 0) {
 		warning("goke: could not enable channel '%d' (%d)\n",
 			AoChn, err);
